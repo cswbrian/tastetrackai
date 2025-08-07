@@ -1,6 +1,36 @@
-# Welcome to your Expo app 👋
+# TasteTrack AI 🍽️
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native app built with Expo for tracking and discovering food experiences with AI assistance.
+
+## Features
+
+- **Authentication**: Google Sign-In integration with secure token persistence
+- **Route Protection**: Automatic redirects based on authentication state
+- **Secure Storage**: Tokens stored securely using expo-secure-store (native) and localStorage (web)
+- **User Profiles**: View and manage user information
+- **Modern UI**: Beautiful, responsive design with dark/light theme support
+
+## Authentication Setup
+
+This app uses Supabase for authentication with secure token persistence. To set up authentication:
+
+1. Create a Supabase project at [supabase.com](https://supabase.com)
+2. Get your project URL and anon key from the project settings
+3. Create a `.env.local` file in the root directory with:
+   ```
+   EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+4. Configure Google OAuth provider in your Supabase dashboard
+5. Set up redirect URLs in your Google OAuth settings:
+   - `tastetrackai://auth/callback`
+
+### Token Persistence
+
+The app securely stores authentication tokens:
+- **Native**: Uses `expo-secure-store` for encrypted storage
+- **Web**: Uses `localStorage` for browser storage
+- **Automatic**: Tokens are automatically restored on app restart
 
 ## Get started
 
@@ -10,7 +40,9 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Set up environment variables (see Authentication Setup above)
+
+3. Start the app
 
    ```bash
    npx expo start
