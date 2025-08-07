@@ -389,7 +389,7 @@ async createDiscovery(data: DiscoveryInput): Promise<Discovery> {
 - `stores/discoveryStore.ts` - Add queue state
 - `components/discovery/DiscoveryCard.tsx` - Add queue status
 - `app/(tabs)/create.tsx` - Add offline handling
-- `app/(tabs)/index.tsx` - Add sync status
+- `app/(tabs)/discoveries.tsx` - Add sync status
 - `types/discovery.ts` - Add queue types
 - `config/processing.ts` - Enable queue mode
 

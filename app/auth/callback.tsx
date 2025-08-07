@@ -32,7 +32,7 @@ export default function AuthCallback() {
             }
             
             if (data.session) {
-              router.replace('/(tabs)');
+              router.replace('/(tabs)/discoveries');
               return;
             }
           }
@@ -48,7 +48,7 @@ export default function AuthCallback() {
         }
 
         if (data.session) {
-          router.replace('/(tabs)');
+          router.replace('/(tabs)/discoveries');
         } else {
           router.replace('/(auth)/login');
         }

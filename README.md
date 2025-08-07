@@ -1,82 +1,168 @@
-# TasteTrack AI 🍽️
+# TasteTrackAI
 
-A React Native app built with Expo for tracking and discovering food experiences with AI assistance.
+A React Native app for tracking and discovering new experiences with AI-powered insights.
 
-## Features
+## Feature 0001: Basic Discovery Creation (MVP)
 
-- **Authentication**: Google Sign-In integration with secure token persistence
-- **Route Protection**: Automatic redirects based on authentication state
-- **Secure Storage**: Tokens stored securely using expo-secure-store (native) and localStorage (web)
-- **User Profiles**: View and manage user information
-- **Modern UI**: Beautiful, responsive design with dark/light theme support
+This feature implements the core discovery creation functionality that allows users to:
 
-## Authentication Setup
+### ✅ Implemented Features
 
-This app uses Supabase for authentication with secure token persistence. To set up authentication:
+- **Multiple Image Support**: Users can add, remove, and reorder multiple photos for each discovery
+- **Text Content**: Optional text notes for each discovery
+- **Content Validation**: Each discovery must have either text content or at least one photo
+- **Category Selection**: Three categories: "Liked It", "Didn't Like It", "Want to Try"
+- **Discovery Types**: Optional categorization by type (Book, Music, Movie, Food, Drink, Place, Product)
+- **Location Capture**: Automatic GPS location capture with fallback to EXIF data
+- **Timeline View**: Chronological display of discoveries with image galleries
+- **Form Validation**: Client-side validation using Zod schemas
+- **State Management**: Zustand store for discovery state management
+- **Database Schema**: Supabase tables with proper relationships and constraints
 
-1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Get your project URL and anon key from the project settings
-3. Create a `.env.local` file in the root directory with:
-   ```
-   EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   ```
-4. Configure Google OAuth provider in your Supabase dashboard
-5. Set up redirect URLs in your Google OAuth settings:
-   - `tastetrackai://auth/callback`
+### 🏗️ Architecture
 
-### Token Persistence
+#### Database Schema
+- `discoveries` table with location data and content constraints
+- `discovery_images` table with image ordering and EXIF data
+- Proper indexes for performance
+- Future-ready for LLM processing and queue management
 
-The app securely stores authentication tokens:
-- **Native**: Uses `expo-secure-store` for encrypted storage
-- **Web**: Uses `localStorage` for browser storage
-- **Automatic**: Tokens are automatically restored on app restart
+#### Core Services
+- `DiscoveryService`: CRUD operations with multiple image support
+- `ImageService`: Image handling, compression, and EXIF extraction
+- `LocationService`: GPS location and reverse geocoding
 
-## Get started
+#### UI Components
+- `DiscoveryCard`: Rich card component with image carousel
+- `CreateDiscoveryScreen`: Comprehensive creation form
+- `DiscoveriesScreen`: Timeline view with pull-to-refresh
 
-1. Install dependencies
+#### State Management
+- Zustand store with async actions
+- Error handling and loading states
+- Optimistic updates
 
+### 🚀 Getting Started
+
+1. Install dependencies:
    ```bash
    npm install
    ```
 
-2. Set up environment variables (see Authentication Setup above)
+2. Set up Supabase:
+   - Create a new Supabase project
+   - Run the migration: `supabase/migrations/001_create_discoveries_table.sql`
+   - Configure environment variables
 
-3. Start the app
-
+3. Start the development server:
    ```bash
-   npx expo start
+   npm start
    ```
 
-In the output, you'll find options to open the app in a
+### 📱 App Structure
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+```
+app/
+├── (tabs)/
+│   ├── discoveries.tsx    # Timeline view of discoveries
+│   ├── create.tsx         # Discovery creation screen
+│   ├── explore.tsx        # Future: AI-powered exploration
+│   └── profile.tsx        # User profile
+├── (auth)/                # Authentication screens
+└── _layout.tsx           # Root layout
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+components/
+├── discovery/
+│   └── DiscoveryCard.tsx  # Discovery display component
+└── ui/                    # Reusable UI components
 
-## Get a fresh project
+services/
+├── discoveryService.ts    # Discovery CRUD operations
+├── imageService.ts        # Image handling and processing
+└── locationService.ts     # Location services
 
-When you're ready, run:
+stores/
+└── discoveryStore.ts      # Zustand state management
 
-```bash
-npm run reset-project
+types/
+└── discovery.ts          # TypeScript interfaces
+
+schemas/
+└── discoverySchema.ts    # Zod validation schemas
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 🔧 Technical Details
 
-## Learn more
+#### Image Processing
+- Support for JPEG, PNG, HEIC formats
+- Automatic compression and resizing
+- EXIF data extraction for location
+- Multiple image upload with ordering
 
-To learn more about developing your project with Expo, look at the following resources:
+#### Location Services
+- GPS location capture with permission handling
+- EXIF location extraction from photos
+- Reverse geocoding for readable location names
+- Fallback mechanisms for location failures
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+#### Form Validation
+- Zod schemas for type safety
+- Content requirement validation (text OR images)
+- Image file validation (size, type, count)
+- Real-time validation feedback
 
-## Join the community
+#### Database Design
+- UUID primary keys for scalability
+- Proper foreign key relationships
+- Check constraints for data integrity
+- Indexes for query performance
+- Future-ready for LLM integration
 
-Join our community of developers creating universal apps.
+### 🎯 Success Criteria Met
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- ✅ Users can create discoveries with text (optional) and multiple photos
+- ✅ Each discovery must have either text content or at least one photo
+- ✅ Users can add, remove, and reorder images in discovery creation
+- ✅ Users can categorize discoveries (Liked It, Didn't Like It, Want to Try)
+- ✅ Users can select discovery types
+- ✅ Location is automatically captured (GPS or EXIF from any image)
+- ✅ Users can manually edit location if needed
+- ✅ Location data is stored with source tracking
+- ✅ Discoveries appear in chronological timeline view with image galleries
+- ✅ Users can refresh discoveries to see new items
+- ✅ Multiple image upload works correctly with proper ordering
+- ✅ Form validation prevents invalid submissions (requires text OR images)
+- ✅ Database schema supports multiple images with proper relationships
+- ✅ Type definitions support multiple images and future enhancements
+
+### 🔮 Future Enhancements
+
+The implementation is designed to be future-ready for:
+
+- **LLM Integration**: Extracted data field for AI-powered insights
+- **Processing Queue**: Status tracking for background processing
+- **Advanced Search**: Full-text search and filtering
+- **Map View**: Geographic discovery visualization
+- **Social Features**: Sharing and collaboration
+- **Analytics**: Discovery patterns and insights
+
+### 🛠️ Development
+
+#### Adding New Discovery Types
+1. Update `discoveryTypes` array in `create.tsx`
+2. Add corresponding icon mapping
+3. Update database schema if needed
+
+#### Extending Image Processing
+1. Modify `ImageService` for new formats
+2. Update validation schemas
+3. Add new EXIF extraction capabilities
+
+#### Database Migrations
+1. Create new migration files in `supabase/migrations/`
+2. Update TypeScript types accordingly
+3. Test with existing data
+
+---
+
+**Note**: This is the MVP implementation of Feature 0001. The architecture is designed to support future enhancements including AI-powered insights, advanced search, and social features.
