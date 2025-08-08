@@ -1,39 +1,131 @@
+import { R2Service } from '@/lib/r2';
 import { ImageMetadata, LocationData } from '@/types/discovery';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 
 export class ImageService {
-  static async uploadImages(files: File[]): Promise<string[]> {
-    // This would typically upload to a cloud storage service
-    // For now, we'll return placeholder URLs
-    // In a real implementation, this would upload to Supabase Storage
-    return files.map((_, index) => `https://example.com/image-${index}.jpg`);
+  /**
+   * Upload multiple images to R2 and return object keys
+   */
+  static async uploadImages(files: File[], userId: string, discoveryId: string): Promise<string[]> {
+    try {
+      // Upload to R2 directly without compression for now
+      // TODO: Implement proper compression for File objects
+      const objectKeys = await R2Service.uploadMultipleFiles(files, userId, discoveryId);
+      
+      return objectKeys;
+    } catch (error) {
+      console.error('Error uploading images to R2:', error);
+      throw new Error(`Failed to upload images: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
-  static async uploadImage(file: File): Promise<string> {
-    // This would typically upload to a cloud storage service
-    // For now, we'll return a placeholder URL
-    return `https://example.com/image-${Date.now()}.jpg`;
+  /**
+   * Upload a single image to R2
+   */
+  static async uploadImage(file: File, userId: string, discoveryId: string): Promise<string> {
+    try {
+      // Upload to R2 directly without compression for now
+      // TODO: Implement proper compression for File objects
+      const objectKey = await R2Service.uploadFile(file, userId, discoveryId);
+      
+      return objectKey;
+    } catch (error) {
+      console.error('Error uploading image to R2:', error);
+      throw new Error(`Failed to upload image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
-  static async compressImage(image: any): Promise<File> {
+  /**
+   * Generate signed URLs for multiple images
+   */
+  static async generateSignedUrls(objectKeys: string[], expiresIn: number = 3600): Promise<string[]> {
+    try {
+      return await R2Service.generateMultipleSignedUrls(objectKeys, expiresIn);
+    } catch (error) {
+      console.error('Error generating signed URLs:', error);
+      throw new Error('Failed to generate signed URLs');
+    }
+  }
+
+  /**
+   * Generate a signed URL for a single image
+   */
+  static async generateSignedUrl(objectKey: string, expiresIn: number = 3600): Promise<string> {
+    try {
+      return await R2Service.generateGetSignedUrl(objectKey, expiresIn);
+    } catch (error) {
+      console.error('Error generating signed URL:', error);
+      throw new Error('Failed to generate signed URL');
+    }
+  }
+
+  /**
+   * Delete an image from R2
+   */
+  static async deleteImage(objectKey: string): Promise<void> {
+    try {
+      await R2Service.deleteFile(objectKey);
+    } catch (error) {
+      console.error('Error deleting image from R2:', error);
+      throw new Error('Failed to delete image');
+    }
+  }
+
+  /**
+   * Compress image using expo-image-manipulator (for URI-based images)
+   */
+  static async compressImage(uri: string): Promise<string> {
     const result = await manipulateAsync(
-      image,
+      uri,
       [{ resize: { width: 1024 } }],
       { compress: 0.8, format: SaveFormat.JPEG }
     );
 
-    // Convert to File object
-    const response = await fetch(result.uri);
-    const blob = await response.blob();
-    return new File([blob], 'compressed-image.jpg', { type: 'image/jpeg' });
+    return result.uri;
   }
 
-  static async compressImages(images: any[]): Promise<File[]> {
+  /**
+   * Compress multiple images (for URI-based images)
+   */
+  static async compressImages(uris: string[]): Promise<string[]> {
     const compressedImages = await Promise.all(
-      images.map(image => this.compressImage(image))
+      uris.map(uri => this.compressImage(uri))
     );
     return compressedImages;
+  }
+
+  /**
+   * Convert File object to URI for compression
+   */
+  static async fileToUri(file: File): Promise<string> {
+    return URL.createObjectURL(file);
+  }
+
+  /**
+   * Compress File object by converting to URI first
+   */
+  static async compressFile(file: File): Promise<File> {
+    try {
+      // Convert File to URI
+      const uri = await this.fileToUri(file);
+      
+      // Compress the image
+      const compressedUri = await this.compressImage(uri);
+      
+      // Convert back to File
+      const response = await fetch(compressedUri);
+      const blob = await response.blob();
+      
+      // Clean up the object URL
+      URL.revokeObjectURL(uri);
+      
+      return new File([blob], file.name, { type: 'image/jpeg' });
+    } catch (error) {
+      console.error('Error compressing file:', error);
+      // Return original file if compression fails
+      return file;
+    }
   }
 
   static async extractEXIFLocation(image: File): Promise<LocationData | null> {

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { Discovery, DiscoveryImage, DiscoveryInput } from '@/types/discovery';
+import { ImageService } from './imageService';
 
 export class DiscoveryService {
   static async createDiscovery(data: DiscoveryInput): Promise<Discovery> {
@@ -27,26 +28,20 @@ export class DiscoveryService {
     // Handle images if provided
     let images: DiscoveryImage[] = [];
     if (data.images && data.images.length > 0) {
-      const imagePromises = data.images.map(async (file, index) => {
-        // Upload image to storage
-        const fileName = `${discovery.id}/${Date.now()}_${index}.jpg`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('discovery-images')
-          .upload(fileName, file);
+      // Upload images to R2
+      const objectKeys = await ImageService.uploadImages(data.images, user.id, discovery.id);
+      
+      // Generate signed URLs for immediate display
+      const signedUrls = await ImageService.generateSignedUrls(objectKeys);
 
-        if (uploadError) throw uploadError;
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('discovery-images')
-          .getPublicUrl(fileName);
-
-        // Save image record
+      // Save image records to database
+      const imagePromises = objectKeys.map(async (objectKey, index) => {
         const { data: imageData, error: imageError } = await supabase
           .from('discovery_images')
           .insert({
             discovery_id: discovery.id,
-            image_url: publicUrl,
+            image_key: objectKey,
+            image_url: signedUrls[index], // Cache the signed URL
             image_order: index,
           })
           .select()
@@ -75,6 +70,8 @@ export class DiscoveryService {
         *,
         discovery_images (
           id,
+          discovery_id,
+          image_key,
           image_url,
           image_order,
           exif_data,
@@ -86,73 +83,46 @@ export class DiscoveryService {
 
     if (error) throw error;
 
-    return discoveries.map(discovery => ({
-      ...discovery,
-      images: discovery.discovery_images || [],
-    }));
-  }
+    // Process images and generate fresh signed URLs if needed
+    const processedDiscoveries = await Promise.all(
+      discoveries.map(async (discovery) => {
+        const images = discovery.discovery_images || [];
+        
+        // Check if signed URLs are expired (older than 1 hour)
+        const now = Date.now();
+        const oneHour = 60 * 60 * 1000;
+        
+        const processedImages = await Promise.all(
+          images.map(async (image) => {
+            // If no URL or URL is expired, generate a new one
+            if (!image.image_url || (now - new Date(image.created_at).getTime()) > oneHour) {
+              try {
+                const newSignedUrl = await ImageService.generateSignedUrl(image.image_key);
+                
+                // Update the cached URL in database
+                await supabase
+                  .from('discovery_images')
+                  .update({ image_url: newSignedUrl })
+                  .eq('id', image.id);
+                
+                return { ...image, image_url: newSignedUrl };
+              } catch (error) {
+                console.error('Error generating signed URL:', error);
+                return image;
+              }
+            }
+            return image;
+          })
+        );
 
-  static async updateDiscovery(id: string, data: Partial<Discovery>): Promise<Discovery> {
-    const { data: discovery, error } = await supabase
-      .from('discoveries')
-      .update({
-        text_content: data.text_content,
-        category: data.category,
-        discovery_type: data.discovery_type,
-        location_lat: data.location_lat,
-        location_lng: data.location_lng,
-        location_name: data.location_name,
-        location_source: data.location_source,
-        updated_at: new Date().toISOString(),
+        return {
+          ...discovery,
+          images: processedImages.sort((a, b) => a.image_order - b.image_order),
+        };
       })
-      .eq('id', id)
-      .select()
-      .single();
+    );
 
-    if (error) throw error;
-
-    // Get images for the discovery
-    const { data: images } = await supabase
-      .from('discovery_images')
-      .select('*')
-      .eq('discovery_id', id)
-      .order('image_order');
-
-    return {
-      ...discovery,
-      images: images || [],
-    };
-  }
-
-  static async deleteDiscovery(id: string): Promise<void> {
-    // Delete images from storage first
-    const { data: images } = await supabase
-      .from('discovery_images')
-      .select('image_url')
-      .eq('discovery_id', id);
-
-    if (images && images.length > 0) {
-      const imageUrls = images.map(img => img.image_url);
-      // Extract file paths from URLs and delete from storage
-      const filePaths = imageUrls.map(url => {
-        const pathMatch = url.match(/discovery-images\/(.+)$/);
-        return pathMatch ? pathMatch[1] : null;
-      }).filter(Boolean);
-
-      if (filePaths.length > 0) {
-        await supabase.storage
-          .from('discovery-images')
-          .remove(filePaths);
-      }
-    }
-
-    // Delete discovery (cascade will delete images)
-    const { error } = await supabase
-      .from('discoveries')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
+    return processedDiscoveries;
   }
 
   static async getDiscoveryById(id: string): Promise<Discovery | null> {
@@ -162,6 +132,8 @@ export class DiscoveryService {
         *,
         discovery_images (
           id,
+          discovery_id,
+          image_key,
           image_url,
           image_order,
           exif_data,
@@ -171,51 +143,107 @@ export class DiscoveryService {
       .eq('id', id)
       .single();
 
-    if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
-      throw error;
-    }
+    if (error) throw error;
+    if (!discovery) return null;
+
+    // Process images similar to getDiscoveries
+    const images = discovery.discovery_images || [];
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
+    
+    const processedImages = await Promise.all(
+      images.map(async (image) => {
+        if (!image.image_url || (now - new Date(image.created_at).getTime()) > oneHour) {
+          try {
+            const newSignedUrl = await ImageService.generateSignedUrl(image.image_key);
+            
+            await supabase
+              .from('discovery_images')
+              .update({ image_url: newSignedUrl })
+              .eq('id', image.id);
+            
+            return { ...image, image_url: newSignedUrl };
+          } catch (error) {
+            console.error('Error generating signed URL:', error);
+            return image;
+          }
+        }
+        return image;
+      })
+    );
 
     return {
       ...discovery,
-      images: discovery.discovery_images || [],
+      images: processedImages.sort((a, b) => a.image_order - b.image_order),
     };
   }
 
+  static async updateDiscovery(id: string, data: Partial<Discovery>): Promise<Discovery> {
+    const { data: discovery, error } = await supabase
+      .from('discoveries')
+      .update(data)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return discovery;
+  }
+
+  static async deleteDiscovery(id: string): Promise<void> {
+    // Get image keys before deletion
+    const { data: images } = await supabase
+      .from('discovery_images')
+      .select('image_key')
+      .eq('discovery_id', id);
+
+    if (images && images.length > 0) {
+      // Delete images from R2
+      const deletePromises = images.map(img => ImageService.deleteImage(img.image_key));
+      await Promise.all(deletePromises);
+    }
+
+    // Delete discovery (cascade will delete images from database)
+    const { error } = await supabase
+      .from('discoveries')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
   static async addImagesToDiscovery(discoveryId: string, images: File[]): Promise<DiscoveryImage[]> {
-    const imagePromises = images.map(async (file, index) => {
-      // Get current max order
-      const { data: existingImages } = await supabase
-        .from('discovery_images')
-        .select('image_order')
-        .eq('discovery_id', discoveryId)
-        .order('image_order', { ascending: false })
-        .limit(1);
+    // Get current max order
+    const { data: existingImages } = await supabase
+      .from('discovery_images')
+      .select('image_order')
+      .eq('discovery_id', discoveryId)
+      .order('image_order', { ascending: false })
+      .limit(1);
 
-      const nextOrder = existingImages && existingImages.length > 0 
-        ? existingImages[0].image_order + 1 + index 
-        : index;
+    const nextOrder = existingImages && existingImages.length > 0 
+      ? existingImages[0].image_order + 1 
+      : 0;
 
-      // Upload image to storage
-      const fileName = `${discoveryId}/${Date.now()}_${index}.jpg`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('discovery-images')
-        .upload(fileName, file);
+    // Get user ID for R2 upload
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
 
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('discovery-images')
-        .getPublicUrl(fileName);
-
-      // Save image record
+    // Upload images to R2
+    const objectKeys = await ImageService.uploadImages(images, user.id, discoveryId);
+    
+    // Generate signed URLs
+    const signedUrls = await ImageService.generateSignedUrls(objectKeys);
+    
+    // Save image records to database
+    const imagePromises = objectKeys.map(async (objectKey, index) => {
       const { data: imageData, error: imageError } = await supabase
         .from('discovery_images')
         .insert({
           discovery_id: discoveryId,
-          image_url: publicUrl,
-          image_order: nextOrder,
+          image_key: objectKey,
+          image_url: signedUrls[index],
+          image_order: nextOrder + index,
         })
         .select()
         .single();
@@ -228,21 +256,16 @@ export class DiscoveryService {
   }
 
   static async removeImageFromDiscovery(imageId: string): Promise<void> {
-    // Get image URL before deletion
+    // Get image key before deletion
     const { data: image } = await supabase
       .from('discovery_images')
-      .select('image_url')
+      .select('image_key')
       .eq('id', imageId)
       .single();
 
     if (image) {
-      // Delete from storage
-      const pathMatch = image.image_url.match(/discovery-images\/(.+)$/);
-      if (pathMatch) {
-        await supabase.storage
-          .from('discovery-images')
-          .remove([pathMatch[1]]);
-      }
+      // Delete from R2
+      await ImageService.deleteImage(image.image_key);
     }
 
     // Delete from database
@@ -262,11 +285,6 @@ export class DiscoveryService {
         .eq('id', id)
     );
 
-    const results = await Promise.all(updatePromises);
-    const errors = results.filter(result => result.error);
-    
-    if (errors.length > 0) {
-      throw errors[0].error;
-    }
+    await Promise.all(updatePromises);
   }
 }

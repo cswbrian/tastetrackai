@@ -19,7 +19,8 @@ export interface Discovery {
 export interface DiscoveryImage {
   id: string;
   discovery_id: string;
-  image_url: string;
+  image_key: string; // R2 object key (e.g., "users/123/discoveries/456/image1.jpg")
+  image_url?: string; // Optional signed URL for display (generated on-demand)
   image_order: number;
   exif_data?: Record<string, any>;
   created_at: string;
@@ -49,6 +50,18 @@ export interface ImageMetadata {
   size: number;
   type: string;
   exif?: Record<string, any>;
+}
+
+// R2 specific types
+export interface R2UploadResult {
+  objectKey: string;
+  signedUrl?: string;
+}
+
+export interface R2ImageData {
+  objectKey: string;
+  signedUrl: string;
+  expiresAt: number;
 }
 
 // Future LLM types (commented for MVP)

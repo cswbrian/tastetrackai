@@ -12,15 +12,15 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -124,7 +124,8 @@ export default function CreateDiscoveryScreen() {
       await createDiscovery(discoveryInput);
       router.back();
     } catch (error) {
-      Alert.alert('Error', 'Failed to create discovery');
+      console.error('Error creating discovery:', error);
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create discovery');
     }
   };
 
@@ -149,7 +150,7 @@ export default function CreateDiscoveryScreen() {
         {selectedImages.map((image, index) => (
           <View key={index} style={styles.imagePreviewWrapper}>
             <Image
-              source={{ uri: image instanceof File ? URL.createObjectURL(image) : image }}
+              source={{ uri: URL.createObjectURL(image) }}
               style={styles.imagePreview}
               contentFit="cover"
             />
